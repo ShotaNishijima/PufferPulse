@@ -1,10 +1,16 @@
 
-setwd("~/git/tfg_assess2020")
+#############################################################################################
+##### Modeling pulse dynamics for standardized recruitment index of juvenile pufferfish #####
+#############################################################################################
+
+# Set working directory and read libraries ----
+
+setwd("~/git/PufferPulse")
 library(TMB)
 library(tidyverse)
 library(glmmTMB)
+# devtools::install_github("ichimomo/frasyr@dev")
 library(frasyr)
-# install.packages("DHARMa")
 library(DHARMa)
 library(mgcv)
 
@@ -13,9 +19,7 @@ source("surfnet_peak_modeling.R")
 TMB::compile("surfnet_peak_model.cpp")
 dyn.load(dynlib("surfnet_peak_model"))
 
-# data の読み込み ----
-# dat0 = read.csv("C:/Users/00007802/Dropbox/tfg/index_age0/surfnet_survey2020.csv", header=T)
-# dat0 = read.csv("data/surfnet_survey2020.csv", header=T)
+# read and process data ----
 Dat0 = read.csv("data/surfnet_survey2021.csv", header=T)
 
 Dat = Dat0 %>% 
@@ -24,7 +28,7 @@ Dat = Dat0 %>%
   arrange(Year,Time)
 
 
-## 網の大きさに応じた重みづけの試算 ----
+## Comparing different effort-weighting methods ----
 
 Dat= Dat0 %>% 
   mutate(area_w = case_when(Year %in% c(2004,2005) ~ 5*1.5/4,
@@ -33,14 +37,13 @@ Dat= Dat0 %>%
          length_w = case_when(Year %in% c(2004,2005) ~ 5/4,
                               Year %in% c(2006,2007) ~ 10/4,
                               TRUE ~ 1)) %>%
-  mutate(Effort = Effort*area_w)   # 面積で重みづけする場合
-# mutate(Effort = Effort*length_w)   # 長さで重みづけする場合
+  mutate(Effort = Effort*area_w)   # area-weighted
 
 Dat1 = Dat %>% 
   # mutate(Time = scale(Time)) %>%
   select(Catch,Effort,Year,Time) %>%
   arrange(Year,Time)
-nrow(Dat) #データ数=105
+nrow(Dat) #N=105
 
 Dat2= Dat0 %>% 
   mutate(area_w = case_when(Year %in% c(2004,2005) ~ 5*1.5/4,
@@ -49,26 +52,13 @@ Dat2= Dat0 %>%
          length_w = case_when(Year %in% c(2004,2005) ~ 5/4,
                               Year %in% c(2006,2007) ~ 10/4,
                               TRUE ~ 1)) %>%
-  # mutate(Effort = Effort*area_w)   # 面積で重みづけする場合
-  mutate(Effort = Effort*length_w)   # 長さで重みづけする場合
+  mutate(Effort = Effort*length_w)   # length-weighted
 
 Dat2 = Dat2 %>% 
   # mutate(Time = scale(Time)) %>%
   select(Catch,Effort,Year,Time) %>%
   arrange(Year,Time)
 
-tapply(Dat$Catch,Dat$Year,length) %>% summary
-tapply(Dat$Catch,Dat$Year,length) %>% sd
-
-Dat$Effort %>% summary()
-Dat$Effort %>% sd()
-
-knitr::kable(head(Dat))
-knitr::kable(head(Dat1))
-knitr::kable(head(Dat2))
-
-# Effortが異なる
-# rm(dat)
 basemodel = spm(dat=Dat,
                 family="nbinom2",
                 a_key=2,b_key=1,c_key=4,
@@ -85,17 +75,15 @@ lengthmodel = spm(dat=Dat2,
                   silent = FALSE)
 
 c(basemodel$BIC,areamodel$BIC,lengthmodel$BIC)
-# length modelが少しだけ良いのでDat2を使う
 
-
-## 網羅的なモデル選択 ----
+# Model selection ----
 
 basemodel = spm(dat=Dat2,
                 family="nbinom2",
                 a_key=1,b_key=1,c_key=2,
                 silent = TRUE)
 
-load("bestmodel.rda")
+# load("bestmodel.rda")
 # bestmodel$input$dat
 (g_fit = plot_spm_fit(basemodel,CI=0.9))
 
@@ -105,13 +93,12 @@ basemodel2 = spm(dat=Dat2,
                 silent = TRUE)
 
 (g_fit2 = plot_spm_fit(basemodel2,CI=0.8))
-#2006年が広い
 
 (g_trend = plot_spm_trend(basemodel))
 (g_trend2 = plot_spm_trend(basemodel2))
   
 
-# nbinom2だけで
+# only nbinom2
 model_list = expand.grid(family = 2, # 0: poisson, 1: nbinom1, 2: nbinom2
                          a_key = 0:4,
                          b_key = 0:4,
@@ -123,12 +110,6 @@ res_list=list()
 summary_table = c()
 
 minAICc = 9999
-
-# i=32
-
-# i = 1
-
-# i = 28
 
 for (i in 1:nrow(model_list)) {
   input_tmp = basemodel$input
@@ -185,7 +166,8 @@ summary_table2 = t(summary_table) %>% as_tibble() %>%
   mutate(SD_est = SD_est) %>% 
   arrange(convergence,desc(pdHess),desc(SD_est),AIC)
 
-write.csv(summary_table2, file = "summary_AICtable.csv")
+dir.create("res")
+# write.csv(summary_table2, file = "res/summary_AICtable.csv")
 
 summary_table2 = t(summary_table) %>% as_tibble() %>% 
   mutate(SD_est = SD_est) %>% 
@@ -196,25 +178,22 @@ summary_table2 = t(summary_table) %>% as_tibble() %>%
   arrange(convergence,desc(pdHess),desc(SD_est),BIC) %>%
   mutate(dBIC = BIC-BIC[1])
 
-write.csv(summary_table2, file = "summary_BICtable.csv")
+write.csv(summary_table2, file = "res/summary_BICtable.csv")
 
 summary_table3 = summary_table2 %>%
   arrange(convergence,desc(pdHess),desc(SD_est),AIC)
 
-write.csv(summary_table3, file = "summary_AICtable.csv")
+write.csv(summary_table3, file = "res/summary_AICtable.csv")
 
 summary_table4 = summary_table2 %>%
   arrange(convergence,desc(pdHess),desc(SD_est),AICc)
 
-write.csv(summary_table4, file = "summary_AICctable.csv")
+write.csv(summary_table4, file = "res/summary_AICctable.csv")
 
 head(summary_table2) #BIC (2,1,4)
 head(summary_table3) #AIC (1,2,0)
 head(summary_table4) #AICc (2,1,4)
 
-# summary_table3
-
-# AICcとBICは一致する
 
 best_BIC = res_list[[summary_table2$id[1]]]
 c(best_BIC$input$a_key,best_BIC$input$b_key,best_BIC$input$c_key)
@@ -237,48 +216,9 @@ sum(is.nan(best_BIC$rep$sd))
 g_aic_fit = plot_spm_fit(best_AIC)
 g_aic_fit
 
-# model_aic = spm(dat=Dat2,
-#                  family="nbinom2",
-#                  a_key=0,b_key=0,c_key=1,
-#                  silent = TRUE
-#                 # ,p0_list=basemodel2$par_list
-#                 )
-# model_aic$rep
-# model_aic$convergence
-# model_aic$pdHess
-# 
-# model_aic$loglik
-# best_AIC$loglik
-# best_AIC$rep
-# 
-# model_aic2 = spm(dat=Dat2,
-#                 family="nbinom2",
-#                 a_key=1,b_key=2,c_key=0,
-#                 silent = TRUE,p0_list=basemodel2$par_list)
-# model_aic2$rep
-# model_aic2$convergence
-# model_aic2$pdHess
+## output AIC & BIC table ----
 
-# model_aic3 = spm(dat=Dat2,
-#                  family="nbinom2",
-#                  a_key=0,b_key=2,c_key=3,
-#                  silent = TRUE
-#                  ,p0_list=best_BIC$par_list
-#                  )
-# 
-# model_aic3$rep
-# 
-# c(model_aic$AIC,model_aic2$AIC)
-
-
-best_AICc = res_list[[summary_table4$id[1]]]
-c(best_AICc$input$a_key,best_AICc$input$b_key,best_AICc$input$c_key)
-best_AICc$loglik
-best_AICc$rep
-
-### output AIC & BIC table ----
-
-summary_table = read.csv("summary_AICtable.csv",header=T)
+summary_table = read.csv("res/summary_AICtable.csv",header=T)
 summary_table %>% colnames()
 summary_table$convergence %>% unique()
 summary_table$SD_est %>% unique()
@@ -323,31 +263,18 @@ aicc_table = summary_table2 %>% arrange(AICc) %>%
 
 
 both_table = full_join(aic_table , bic_table)
-write.csv(both_table, file="AIC-BIC_table.csv",row.names=FALSE)
+write.csv(both_table, file="res/AIC-BIC_table.csv",row.names=FALSE)
 
+# Leave-out cross validation ----
 
-# bestmodel=best_AICc
-
-### cross validation ----
-
-# if (0) {
   model_list = list(best_BIC,best_AIC)
   
-  # sapply(1:30, function(i) model_list[[i]]$pdHess)
-  
   cv_seed1 = spm_CV(model_list,k=nrow(Dat2),seed=1,type=3)
-  # cv_seed1 = spm_CV(model_list,k=10,seed=1,type=3)
-  # # cv_seed1 = spm_CV(model_list,k=10,seed=1,type=2) #これだとRMSEとMAEでは逆転する
-  
-  # cv_seed1$summary %>% View()
+
   cv_summary1 = cv_seed1$summary %>% arrange(mean_rmse)
   cv_summary1 = cv_seed1$summary %>% arrange(mean_mae)
   cv_summary1 = cv_seed1$summary %>% arrange(mean_ls)
-  # cv_seed1$all %>% View
-  # View(cv_summary1)
-  
-  # colnames(cv_seed1$all)
-  
+
   cv_summary2 = cv_seed1$all %>% as_tibble() %>% group_by(model) %>%
     summarise(RMSE = sqrt(mean(rmse^2)),MAE = mean(mae), MAD= median(mad), LogScore=mean(ls),SD_LogScore=sd(ls)) %>%
     mutate(Model = if_else(model==1,"Best BIC","Best AIC")) %>%
@@ -356,36 +283,26 @@ write.csv(both_table, file="AIC-BIC_table.csv",row.names=FALSE)
     
   bestmodel = model_list[[cv_summary1$model[1]]]
   
-  # View()
-  
-  # write.csv(cv_summary1, file = "loocv_summary.csv")
-  write.csv(cv_summary2, file = "loocv_summary.csv")
-  
-  write.csv(cv_seed1$all, file = "loocv_all.csv")
-  
-# }
+  write.csv(cv_summary2, file = "res/loocv_summary.csv")
+  write.csv(cv_seed1$all, file = "res/loocv_all.csv")
 
-# save(bestmodel,file="bestmodel.rda")
-load("bestmodel.rda")
-bestmodel$input$dat %>% nrow
+save(bestmodel,file="bestmodel.rda")
+# load("bestmodel.rda")
 
 (g_fit_best = plot_spm_fit(bestmodel,CI=0.8,ncol=6))
 
-ggsave(g_fit_best, file = "CPUE_fit_bestmodel_rev.png",dpi=600,unit="mm",height=120,width=240)
+ggsave(g_fit_best, file = "res/CPUE_fit_bestmodel.png",dpi=600,unit="mm",height=120,width=240)
 
 Index = bestmodel$index
 
-write.csv(Index,file = "index_bestmodel.csv")
+write.csv(Index,file = "res/index_bestmodel.csv")
 
 g_trend_best = plot_spm_trend2(bestmodel)
 g_trend_best$graph
 
-ggsave(g_trend_best$graph, file = "index_trend.png",dpi=600,unit="mm",height=150,width=240)
+ggsave(g_trend_best$graph, file = "res/index_trend.png",dpi=600,unit="mm",height=150,width=240)
 
-
-### 
-
-### model diagnostics ----
+# model diagnostics ----
 
 set.seed(1010)
 catch_obs = Dat2$Catch
@@ -396,11 +313,8 @@ for (i in 1:nsim) {
   sim = bestmodel$obj$simulate()$Catch
   sim_catch = rbind(sim_catch,sim)
   sim_catch_add = rbind(sim_catch_add, sim + runif(length(sim),-0.5,0.5))
-  # catch_obs_add = rbind(catch_obs_add, catch_obs + runif(length(catch_obs),-0.5,0.5))
 }
 
-# dim(sim_catch)
-# ?createDHARMa
 tmp = createDHARMa(t(sim_catch),Dat2$Catch,fittedPredictedResponse = bestmodel$Catch_pred,integerResponse = T,seed=1)
 plot(tmp)
 plot(tmp,quantreg=FALSE)
@@ -413,28 +327,12 @@ Resid_test$uniformity
 ZI_test = testZeroInflation(tmp)
 ZI_test$p.value
 
-# ?testDispersion
-# Disp_test = test
-
 plot(tmp$scaledResiduals~std_resid )
-# dim(catch_obs_add)
 
-# j=1
-# sim_catch_add[,j]
-# std_resid = sapply(1:length(catch_obs), function(j) sum(sim_catch_add[,j]<catch_obs_add[,j])/nsim)
-
-# hist(std_resid)
-
-# # j=1
-# std_resid = sapply(1:length(catch_obs), function(j) sum(sim_catch_add[,j]<catch_add[j])/nsim )
 std_resid = tmp$scaledResiduals
 zero_count = sapply(1:nsim, function(j) sum(sim_catch[j,]==0))
 
 hist(std_resid)
-
-## 
-
-# nrow(bestmodel$dat_pred)
 
 df = bestmodel$dat_pred %>% mutate(resid = std_resid)
 
@@ -471,9 +369,6 @@ g_qq = ggplot(data=df) +
   theme_SH()
 g_qq
 
-colnames(df)
-range(std_resid)
-
 df = df %>% mutate(Rank = rank(Catch_pred)) %>%
   mutate(Standardized_Rank = (Rank-min(Rank))/(max(Rank)-min(Rank)))
 
@@ -482,24 +377,15 @@ Rank = function(x) (rank(x)-min(rank(x)))/(max(rank(x))-min(rank(x)))
 df = df %>% 
   mutate(Time_rank = Rank(Time),Year_rank = Rank(Year))
 
-# hist((rank(df$Time)-min(rank(df$Time)))/(max(rank(df$Time))-min(rank(df$Time))))
 
 logit=function(x)log(x/(1-x))
 
 m1 = gam(logit(resid)~s(Rank),data=df)
 m1 = gam(resid~s(Rank),data=df,family=betar(link="logit"))
-# names(summary(m1))
+
 p1 = summary(m1)[["s.table"]][1,4]
 p1 = data.frame(label = paste0("P = ", round(p1,3)),x=1,y=1.0)
 
-# tmp2 = loess(logit(resid)~Rank,data=df)
-# summary(tmp2)
-
-# summary(glm(logit(resid)~Rank_time,data=df))
-# summary(glm(logit(resid)~Time,data=df))
-# 
-# summary(gam(logit(resid)~s(Rank_time),data=df))
-# m2 = gam(logit(resid)~s(Time),data=df)
 m2=gam(resid~s(Time),data=df,family=betar(link="logit"))
 summary(m2)
 # m2 = gam(resid~s(Time),data=df)
@@ -531,9 +417,6 @@ g_scatter_smooth = ggplot(data=df,aes(x=Standardized_Rank,y=resid)) +
   ylim(0,1.05)+
   geom_text(data=p1,parse=FALSE,aes(x=x,y=y,label=label,hjust=1,vjust=0),size=4)
 g_scatter_smooth
-
-# df = df %>% mutate(Rank_time = rank(Time)) %>%
-#   mutate(Standardized_Rank_time = (Rank_time-min(Rank_time))/(max(Rank_time)-min(Rank_time)))
 
 g_scatter_smooth2 = ggplot(data=df,aes(x=Time,y=resid)) +
   # g_scatter_smooth = ggplot(data=df,aes(x=Catch_pred,y=log(resid/(1-resid)))) +
@@ -584,7 +467,7 @@ g_all = gridExtra::grid.arrange(g_resid_hist,g_qq,g_zero_hist,
 
 # ggsave(g_all, file="bestmodel_diagnosis.png",unit="mm",width=240,height=150,dpi=600)
 # ggsave(g_all, file="bestmodel_diagnosis.png",unit="mm",width=240,height=150,dpi=600)
-ggsave(g_all, file="bestmodel_diagnosis_rev.png",unit="mm",width=240,height=240,dpi=600)
+ggsave(g_all, file="res/bestmodel_diagnosis_rev.png",unit="mm",width=240,height=240,dpi=600)
 
 (stats::cov2cor(bestmodel$rep$cov.fixed))
 
@@ -592,7 +475,7 @@ ggsave(g_all, file="bestmodel_diagnosis_rev.png",unit="mm",width=240,height=240,
 (time_peak_sd = bestmodel$rep_summary[rownames(bestmodel$rep_summary) == "b_par",2]*bestmodel$time_sd)
 
 
-## index parameter plot ----
+# index parameter plot ----
 
 bestmodel$rep_summary %>% rownames %>% unique
 
@@ -648,7 +531,7 @@ g_c = ggplot(data=par_pred2_c,aes(x=Year)) +
 g_c
 
 g_abc = gridExtra::grid.arrange(g_a,g_b,g_c,nrow=1)
-ggsave(g_abc, file="parameter_change.png",dpi=600,width=240,height=80,unit="mm")
+ggsave(g_abc, file="res/parameter_change.png",dpi=600,width=240,height=80,unit="mm")
 
 
 index = bestmodel$index %>%
@@ -672,15 +555,16 @@ index2 = data.frame(Year = index$Year,
                     Standardized_index = str_c(round(index$`Standardized index`,2)," (",round(index$`Standardized index (scaled)`,2),")",sep=""),
                     CV = str_c(round(index$CV,2)," (",round(index$`CV (scaled)`,2),")",sep=""))
 
-write.csv(index2, file="index_table.csv")
+write.csv(index2, file="res/index_table.csv")
 
 g_trend = plot_spm_trend2(bestmodel,CI=CI,legend_position=c(0.6,0.9))
 g_trend$graph
-ggsave(g_trend$graph, file="year_trend.png",dpi=600,width=180,height=100,unit="mm")
+ggsave(g_trend$graph, file="res/year_trend.png",dpi=600,width=180,height=100,unit="mm")
 
 # bestmodel$opt$par["log_sigma_c"] %>% exp()
 
-### retrospective analysis of standardized index ----
+# retrospective analysis of standardized index ----
+## Results are not shown in the article
 
 load("bestmodel.rda")
 
@@ -713,8 +597,8 @@ retro_index_dat_wider = retro_index_dat %>%
   dplyr::select(Year,Estimate,retro_year) %>% 
   pivot_wider(names_from="retro_year",values_from="Estimate")
 
-write.csv(retro_index_dat,file="retro_index_dat.csv",row.names=FALSE)
-write.csv(retro_index_dat_wider,file="retro_index_dat_wider.csv",row.names=FALSE)
+write.csv(retro_index_dat,file="res/retro_index_dat.csv",row.names=FALSE)
+write.csv(retro_index_dat_wider,file="res/retro_index_dat_wider.csv",row.names=FALSE)
 
 retro_index_dat = retro_index_dat %>%
   mutate(retro_id = as.character(retro_year))
@@ -737,7 +621,7 @@ g_index_retro = ggplot(data=retro_index_dat)+
   ylab("Standardized index value")
 g_index_retro
 
-ggsave(g_index_retro,filename="index_retro.png",dpi=600,unit="mm",
+ggsave(g_index_retro,filename="res/index_retro.png",dpi=600,unit="mm",
        height=100,width=160)
 
 
