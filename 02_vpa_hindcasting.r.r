@@ -1,39 +1,40 @@
 
-### トラフグ伊勢・三河湾系群　0歳魚指標値VPA計算 ----
+#####################################################################
+##### Analyzing VPA with short-term forecasting and hindcasting #####
+#####################################################################
 
-library(TMB)
+# Set working directory and read libraries ----
+
+setwd("~/git/PufferPulse")
+
+# library(glmmTMB)
+# library(devtools)
+# library(TMB)
+# library(testthat)
+
 library(tidyverse)
-library(glmmTMB)
-library(devtools)
+# devtools::install_github("ichimomo/frasyr@dev")
+library(frasyr)
+library(mgcv)
 
-setwd("~/git/tfg_assess2020/vpa")
-source("../surfnet_peak_modeling.R")
+# Read source code and best model ----
 
-load("../bestmodel.rda")
+source("surfnet_peak_modeling.R")
 
+load("bestmodel.rda")
 dat = bestmodel$input$dat
 
 nominal = dat %>% group_by(Year) %>%
   summarise(Max = max(Catch/Effort),Mean = mean(Catch/Effort))
 
-### トラフグ伊勢・三河湾系群　0歳魚指標検討vpa
-
-# devtools::load_all("~/git/frasyr")
-# devtools::check("~/git/frasyr")
-# devtools::document("~/git/frasyr")
-
-### 私のgithub上にあるfrasyr@torafuguブランチを使ってください
-# devtools::install_github("ShotaNishijima/frasyr@torafugu")
-# devtools::install_github("ichimomo/frasyr@dev")
-library(frasyr)
-library(testthat)
+# VPA analysis ----
 
 #VPA data
-caa <- read.csv("caa.csv",row.names=1)
-waa <- read.csv("waa.csv",row.names=1)
-maa <- read.csv("maa.csv",row.names=1)
-M <- read.csv("M.csv",row.names=1)
-cpue0 <- read.csv("cpue_age1.csv",row.names=1)
+caa <- read.csv("data/caa.csv",row.names=1)
+waa <- read.csv("data/waa.csv",row.names=1)
+maa <- read.csv("data/maa.csv",row.names=1)
+M <- read.csv("data/M.csv",row.names=1)
+cpue0 <- read.csv("data/cpue_age1.csv",row.names=1)
 
 dat0 <- data.handler(caa, waa, maa, cpue0, M)
 
@@ -42,7 +43,7 @@ tf.mat[1,(ncol(caa)-2):(ncol(caa)-1)] <- 1
 
 tf_year = as.numeric(rev(colnames(dat0$caa))[1])
 
-## 0歳魚指標未使用 ----
+## without age-0 index ----
 vout <- vpa(dat0,
             tf.year=(tf_year-3):(tf_year-1),
             Pope=TRUE,
@@ -58,18 +59,18 @@ vout <- vpa(dat0,
             tf.mat=tf.mat) 
 
 vout$faa[,as.character((tf_year-4):(tf_year))]
-vout$naa[,as.character((tf_year-4):(tf_year))] #4月時点でのnaaと一致（VPAの結果と確認）
-
+vout$naa[,as.character((tf_year-4):(tf_year))]
 vout$faa[,as.character(tf_year)]
 dat0$caa[,as.character(tf_year)]
 
-## データセット生成 ----
+
+## Processing age-0 index data ----
 
 # index_age0 = read.csv("../index_bestmodel.csv",header=T)
 index_age0 = bestmodel$index
 
 # index_age0 = read.csv("../index_bestmodel.csv",header=T)
-rec_est0 = read.csv(paste0("Recruit_estimate",tf_year,".csv"), header=T) 
+rec_est0 = read.csv(paste0("data/Recruit_estimate",tf_year,".csv"), header=T) 
 rec_est = rec_est0 %>% dplyr::filter(Year %in% unique(dat$Year)) %>%
   dplyr::mutate(Prop_nat = Natural/Total)
 
@@ -87,6 +88,7 @@ index_age0 = index_age0 %>%
                 Nominal_max=Max2,Nominal_mean=Mean2)
 
 dat1 <- dat2 <- dat3 <- dat0
+
 # Standardized
 dat1$index[2,colnames(dat1$index) %in% as.character(index_age0$Year)] <- index_age0 %>% filter(Year %in% as.numeric(colnames(dat0$index))) %>%
   dplyr::select(Standardized) %>% unlist() %>% as.numeric()
@@ -94,9 +96,6 @@ dat1$index[2,colnames(dat1$index) %in% as.character(index_age0$Year)] <- index_a
 # Nominal Max 
 dat2$index[2,colnames(dat2$index) %in% as.character(index_age0$Year)] <- index_age0 %>% filter(Year %in% as.numeric(colnames(dat0$index))) %>%
   dplyr::select(Nominal_max) %>% unlist() %>% as.numeric()
-
-# row.names(dat1$index) <- c("age1","age0")
-# write.csv(dat1$index,file="cpue.csv",row.names=TRUE)
 
 # Nominal Mean 
 dat3$index[2,colnames(dat3$index) %in% as.character(index_age0$Year)] <- index_age0 %>% filter(Year %in% as.numeric(colnames(dat0$index))) %>%
@@ -106,10 +105,10 @@ row.names(dat1$index) <- row.names(dat2$index) <- row.names(dat3$index) <- c("ag
 
 remove.abund = dat1$index
 remove.abund[1,] <- 0
-remove.abund[2,] <- rec_est0$Additive*exp(0.125) #10月 -> 4月への変更
+remove.abund[2,] <- rec_est0$Additive*exp(0.125) #Transition from October -> April
 
 
-## vpa analysis ----
+## vpa analysis with age-0 index ----
 
 #with standardized
 vout1 <- vpa(dat1,
@@ -126,16 +125,14 @@ vout1 <- vpa(dat1,
              term.F = "max",
              add.p.est = 0,
              add.p.ini=0.1,
-             est.method="ls", #LSに変更 2022/06/15
+             est.method="ls", #change to LS 2022/06/15
              remove.abund=remove.abund) 
 
 vout$input$fc.year
-
 dat1$index
 vout1$term.f
 vout1$faa[,as.character((tf_year-4):tf_year)]
 vout1$sigma
-
 vout1$pred.index
 
 # nominal max
@@ -158,28 +155,22 @@ vout3$faa[,as.character((tf_year-4):tf_year)]
 
 cbind(vout1$sigma,vout2$sigma,vout3$sigma)
 
-#standardizedのfitが最も良い 
+#the best fit with standardized
 
-
-## 残差プロット ----
-
+## residual plot ----
 
 residual1 = plot_residual_vpa(vout1,index_name=c("Age 1", "Age 0"),plot_year=1995:2020)
-ggsave(residual1$year_resid + ylab("Residual"),filename="year_resid.png",dpi=600,unit="mm",height=80,width=180)
-ggsave(residual1$fitting_Index,filename="fitting_index.png",dpi=600,unit="mm",height=80,width=180)
-ggsave(residual1$abund_Index + xlab("Abundance"),filename="abund_index.png",dpi=600,unit="mm",height=80,width=180)
+# ggsave(residual1$year_resid + ylab("Residual"),filename="res/year_resid.png",dpi=600,unit="mm",height=80,width=180)
+# ggsave(residual1$fitting_Index,filename="res/fitting_index.png",dpi=600,unit="mm",height=80,width=180)
+# ggsave(residual1$abund_Index + xlab("Abundance"),filename="res/abund_index.png",dpi=600,unit="mm",height=80,width=180)
 
 
-# ?plot_residual_vpa
 resid1_age0 = residual1$gg_data %>% filter(Index_Label=="Age 0") %>%
   dplyr::select(year,resid) %>% na.omit()
 
-library(mgcv)
 
 m1 = gam(resid~s(year),data=resid1_age0)
 summary(m1)
-
-residual1$year_resid
 
 g1 = ggplot(data=resid1_age0,aes(year,resid))+
   geom_point(size=2)+theme_bw()+
@@ -244,7 +235,7 @@ g_fit = ggplot(resid_age0,aes(x=Year)) +
   facet_wrap(vars(Index),ncol=3,scales="free_y")+
   theme_bw(base_size=16)+
   ggtitle("(a) Prediction vs. Observation")
-# g_fit
+g_fit
 
 
 resid_label = resid_age0 %>% 
@@ -269,14 +260,13 @@ g_resid = ggplot(resid_age0,aes(x=Year)) +
   geom_text(data=resid_label,parse=TRUE,aes(y=y,label=label,hjust=0,vjust=0.5),size=5)+
   geom_text(data=p_label,parse=TRUE,aes(y=y,label=label,hjust=0,vjust=0),size=5)+
   ggtitle("(b) Residual trend")
-# g_resid
+g_resid
 
-vout1$sigma
 
 g_both = gridExtra::grid.arrange(g_fit,g_resid,nrow=2)
 g_both
 
-ggsave(g_both,file="VPA_fit.png",dpi=600,unit="mm",height=180,width=240)
+ggsave(g_both,file="res/VPA_fit.png",dpi=600,unit="mm",height=180,width=240)
 
 
 ## retrospective analysis ----
@@ -305,28 +295,8 @@ vout3_retro = do_retrospective_vpa(vout3,n_retro=10,grid_init = NULL,
 vout3_retro$mohn_rho
 vout3_retro$result$retro.f
 
-vout3_retro$result$Res[[2]]$input$remove.abund
-vout3_retro$result$Res[[2]]$naa
-vout3_retro$result$Res[[2]]$faa
 
-vout3_retro$result$Res[[3]]$naa
-vout3_retro$result$Res[[3]]$faa
-
-input = vout3_retro$result$Res[[3]]$input
-# vout3$faa
-# input$add.p.ini <- 0.1
-# input$p.init <- 1
-# input$sel.def <- "mean"
-# input$est.method <- "ml"
-tmp = safe_call("vpa",input)
-tmp$term.f
-tmp$faa
-tmp$logLik
-
-vout3_retro$graph
-
-
-## 推定値の比較 ---- 
+## Compare estimates ---- 
 
 vpa_list = list(vout,vout1,vout2,vout3)
 
@@ -349,7 +319,7 @@ g_vpa2 = ggplot(data=vpa_dat,aes(x=year,y=value,group=id,linetype=id,colour=id,s
   theme_SH(legend.position="bottom")
 g_vpa2
 
-ggsave(g_vpa2,filename="compare_vpa.png",unit="mm",dpi=600,height=120,width=180)
+ggsave(g_vpa2,filename="res/compare_vpa.png",unit="mm",dpi=600,height=120,width=180)
 
 
 ## retrospective forecasting ----
@@ -372,12 +342,6 @@ for(i in 1:length(vout_retro$result$Res)) {
 # with standardized index
 vout1_forecast = one_year_forecast(vout1, index_value=rev(index_age0$Estimate)[1],rec_additive=rec_additive)
 vout1_forecast = vout1_forecast %>% mutate(retro_year = 0)
-
-vout1_forecast %>% filter(retro_year==1) %>% View
-
-# vout1_forecast %>% filter(Year==2020)
-
-# sapply(1:length(vout1_retro$result$Res), function(i) vout1_retro$result$Res[[i]]$term.f)
 
 for(i in 1:length(vout1_retro$result$Res)) {
   rec_additive2 = pull(filter(rec_est0,Year<=max_year-i),Additive)
@@ -406,42 +370,25 @@ for(i in 1:length(vout3_retro$result$Res)) {
   vout3_forecast = full_join(vout3_forecast, df)
 }
 
-# dat_forecast = vout_forecast
-# dat_forecast = vout1_forecast
-# dat_forecast = vout2_forecast
-# dat_forecast = vout3_forecast
-
-
 vout_mohn = get_mohn_graph(vout_forecast)
 g0 = vout_mohn$gg + ggtitle("Without age0-index")
 g0
-ggsave(g0,file="retro_without_age0.png",unit="mm",dpi=600,height=150,width=240)
+ggsave(g0,file="res/retro_without_age0.png",unit="mm",dpi=600,height=150,width=240)
 
 vout1_mohn = get_mohn_graph(vout1_forecast)
 g1 = vout1_mohn$gg + ggtitle("With standardized index")
 g1
-ggsave(g1,file="retro_standardized.png",unit="mm",dpi=600,height=150,width=240)
+ggsave(g1,file="res/retro_standardized.png",unit="mm",dpi=600,height=150,width=240)
 
 vout2_mohn = get_mohn_graph(vout2_forecast)
 g2 = vout2_mohn$gg + ggtitle("With nominal-max index")
 g2
-ggsave(g2,file="retro_nominal-max.png",unit="mm",dpi=600,height=150,width=240)
+ggsave(g2,file="res/retro_nominal-max.png",unit="mm",dpi=600,height=150,width=240)
 
 vout3_mohn = get_mohn_graph(vout3_forecast)
 g3 = vout3_mohn$gg + ggtitle("With nominal-mean index")
 g3
-ggsave(g3,file="retro_nominal-mean.png",unit="mm",dpi=600,height=150,width=240)
-
-# rf_dat = vout_mohn$dat_longer %>% mutate(Model = "No age0-index") %>%
-#   bind_rows(vout1_mohn$dat_longer %>% mutate(Model = "Standardized")) %>%
-#   bind_rows(vout2_mohn$dat_longer %>% mutate(Model = "Nominal-max")) %>%
-#   bind_rows(vout3_mohn$dat_longer %>% mutate(Model = "Nominal-mean")) %>%
-#   filter(Variable != "U") %>%
-#   filter(Year > (max(.$Year)-16)) %>%
-#   mutate(Model_f = factor(Model,levels=c("No age0-index","Nominal-max","Nominal-mean","Standardized"))) %>%
-#   mutate(retro_id = as.character(retro_year))
-
-rf_dat$Variable %>% unique
+ggsave(g3,file="res/retro_nominal-mean.png",unit="mm",dpi=600,height=150,width=240)
 
 rf_dat = vout_mohn$dat_longer %>% mutate(Model = "No age0-index") %>%
   bind_rows(vout1_mohn$dat_longer %>% mutate(Model = "Standardized")) %>%
@@ -451,19 +398,6 @@ rf_dat = vout_mohn$dat_longer %>% mutate(Model = "No age0-index") %>%
   filter(Year > (max(.$Year)-16)) %>%
   mutate(Model_f = factor(Model,levels=c("No age0-index","Nominal-max","Nominal-mean","Standardized"))) %>%
   mutate(retro_id = as.character(retro_year))
-
-
-# rho_dat = rownames_to_column(data.frame(value=vout_mohn$rho),"Variable") %>% mutate(Model = "No age0-index") %>%
-#   bind_rows(rownames_to_column(data.frame(value=vout1_mohn$rho),"Variable") %>% mutate(Model = "Standardized")) %>%
-#   bind_rows(rownames_to_column(data.frame(value=vout2_mohn$rho),"Variable") %>% mutate(Model = "Nominal-max")) %>%
-#   bind_rows(rownames_to_column(data.frame(value=vout3_mohn$rho),"Variable") %>% mutate(Model = "Nominal-mean")) %>%
-#   filter(Variable != "U" & Variable != "Number") %>%
-#   mutate(Year = max(vout1_mohn$dat_longer$Year)) %>%
-#   full_join(rf_dat %>% group_by(Variable) %>%
-#               summarise(y = max(Value))) %>% 
-#   mutate(label=sprintf("rho == %.2f",value)) %>%
-#   mutate(Variable=factor(Variable,levels=c("Recruit","Biomass","SSB","F","Catch"))) %>%
-#   mutate(Model_f = factor(Model,levels=c("No age0-index","Nominal-max","Nominal-mean","Standardized")))
 
 rho_dat = rownames_to_column(data.frame(value=vout_mohn$rho),"Variable") %>% mutate(Model = "No age0-index") %>%
   bind_rows(rownames_to_column(data.frame(value=vout1_mohn$rho),"Variable") %>% mutate(Model = "Standardized")) %>%
@@ -476,9 +410,6 @@ rho_dat = rownames_to_column(data.frame(value=vout_mohn$rho),"Variable") %>% mut
   mutate(label=sprintf("rho == %.2f",value)) %>%
   mutate(Variable=factor(Variable,levels=c("Recruit","Biomass","SSB","U","Catch"))) %>%
   mutate(Model_f = factor(Model,levels=c("No age0-index","Nominal-max","Nominal-mean","Standardized")))
-
-  
-rho_dat
 
 g_retro_all = ggplot(data=rf_dat)+
   geom_path(size=0.8,aes(x=Year,y=Value,colour=retro_id,linetype=retro_id))+
@@ -509,11 +440,10 @@ g_retro_all2 = ggplot(data=rf_dat_others)+
   ylab("")+ylim(0,NA)
 g_retro_all2  
 
-
-ggsave(g_retro_all,filename="retro_all_models.png",dpi=600,unit="mm",
+ggsave(g_retro_all,filename="res/retro_all_models.png",dpi=600,unit="mm",
        height=160,width=240)
 
-ggsave(g_retro_all2,filename="retro_all_models_rev.png",dpi=600,unit="mm",
+ggsave(g_retro_all2,filename="res/retro_all_models_rev.png",dpi=600,unit="mm",
        height=160,width=240)
 
 dat_forecast = vout_mohn$dat_plot %>% mutate(Index = "w/o age0-index") %>%
@@ -539,23 +469,13 @@ g_forecast
 
 # filter(dat_forecast,Index=="Standardized" & Variable=="Recruit") %>% View()
 
-ggsave(g_forecast,file="compare_forecast.png",dpi=600,unit="mm",height=180,width=240)
+ggsave(g_forecast,file="res/compare_forecast.png",dpi=600,unit="mm",height=180,width=240)
 
-vout1_retro$result$Res[[4]]$ssb
-vout1_retro$result$Res[[4]]$faa
 
-vout1_retro$result$Res[[4]]$saa
-
-vout1_retro$result$Res[[10]]$ssb
-vout1_retro$result$Res[[10]]$faa
-vout1_retro$result$Res[[10]]$saa
-vout1$saa
-vout1$faa
-
-out.vpa(vout,filename="Vpa_No_Age0_Index")
-out.vpa(vout1,filename="Vpa_Age0_Index_standardized")
-out.vpa(vout2,filename="Vpa_Age0_Index_nominal-max")
-out.vpa(vout3,filename="Vpa_Age0_Index_nominal-mean")
+out.vpa(vout,filename="res/Vpa_No_Age0_Index")
+out.vpa(vout1,filename="res/Vpa_Age0_Index_standardized")
+out.vpa(vout2,filename="res/Vpa_Age0_Index_nominal-max")
+out.vpa(vout3,filename="res/Vpa_Age0_Index_nominal-mean")
 
 ### output selectivity ---- 
 
@@ -576,10 +496,10 @@ dat_saa = vout1$faa %>% as.data.frame() %>% rownames_to_column(var="age") %>%
   ylim(0,1)+ylab("Selectivity at age")
 )
 
-ggsave(g_saa,filename="selectivity.png",dpi=600,unit="mm",height=100,width=150)
+ggsave(g_saa,filename="res/selectivity.png",dpi=600,unit="mm",height=100,width=150)
 
 
-### hindcast cross validation ----
+## hindcast cross validation ----
 
 ## one year forecast
 index_age1 = vout$input$dat$index %>% t() %>% as.data.frame() %>%
@@ -632,10 +552,9 @@ vout1_MASE = data.frame(denominator=mean(abs(diff(pull(vout1_cv %>% na.omit(),Ob
                        numerator = mean(abs(pull(vout1_cv %>% na.omit() %>% mutate(Error = Observation-Prediction),Error)))) %>%
   mutate(MASE = numerator/denominator)
 
-sd(vout_cv$q,na.rm=TRUE)/mean(vout_cv$q,na.rm=TRUE)
-sd(vout1_cv$q,na.rm=TRUE)/mean(vout1_cv$q,na.rm=TRUE)
-
-matplot(cbind(vout_cv$q,vout1_cv$q) %>% na.omit())
+# sd(vout_cv$q,na.rm=TRUE)/mean(vout_cv$q,na.rm=TRUE)
+# sd(vout1_cv$q,na.rm=TRUE)/mean(vout1_cv$q,na.rm=TRUE)
+# matplot(cbind(vout_cv$q,vout1_cv$q) %>% na.omit())
 
 # nominal max index
 Q = vout2_retro$result$Res %>% map_dbl(., function(x) x$q[1])
@@ -717,8 +636,7 @@ dat_hindCV_point = dat_hindCV %>% group_by(retro_id) %>%
     ylab("Age-1 index value")
 )
 
-ggsave(g_hindCV,file="hindcast_CV.png",dpi=600,unit="mm",height=120,width=180)
-
+ggsave(g_hindCV,file="res/hindcast_CV.png",dpi=600,unit="mm",height=120,width=180)
 
 
 ## two year forecast ----
@@ -764,9 +682,6 @@ temp = vout1_cv_full2 %>%
 vout1_MASE2 = data.frame(numerator=mean(abs(temp$Error)),
                          denomator=mean(abs(diff(pull(index_age1 %>% filter(Year >= min(temp$Year)-4),Observation),lag=2)))) %>%
   mutate(MASE = numerator/denomator)
-# > vout1_MASE2
-# denomator numerator     MASE
-# 1  22810.82  52159.41 0.437329
 
 Q = vout2_retro$result$Res %>% map_dbl(., function(x) x$q[1])
 Q_dat = data.frame(q = Q) %>% mutate(retro_year = 1:n())
@@ -809,9 +724,6 @@ temp = vout3_cv_full2 %>%
 vout3_MASE2 = data.frame(numerator=mean(abs(temp$Error)),
                          denomator=mean(abs(diff(pull(index_age1 %>% filter(Year >= min(temp$Year)-4),Observation),lag=2)))) %>%
   mutate(MASE = numerator/denomator)
-# > vout3_MASE2
-# denomator numerator      MASE
-# 1  20569.48  52159.41 0.3943581
 
 dat_MASE2 = vout_MASE2 %>% mutate(Index = "No age0-index") %>%
   full_join(vout1_MASE2 %>% mutate(Index = "Standardized")) %>%
@@ -849,10 +761,10 @@ dat_hindCV2_point = dat_hindCV2 %>% group_by(retro_id) %>%
     ylab("Age-1 index value")
 )
 
-ggsave(g_hindCV2,file="hindcast_CV2.png",dpi=600,unit="mm",height=120,width=180)
+ggsave(g_hindCV2,file="res/hindcast_CV2.png",dpi=600,unit="mm",height=120,width=180)
 
 
-### Figure h=1 and h=2
+### Figure h=1 and h=2 ----
 
 (g_hindCV_both1 = ggplot(data=dat_hindCV,aes(x=Year))+
     geom_path(aes(y=Prediction,colour=retro_id),size=0.8)+
@@ -883,102 +795,16 @@ ggsave(g_hindCV2,file="hindcast_CV2.png",dpi=600,unit="mm",height=120,width=180)
 
 g_hindCV_both =gridExtra::grid.arrange(g_hindCV_both1,g_hindCV_both2)
 
-ggsave(g_hindCV_both,file="hindcast_CV_both.png",dpi=600,unit="mm",height=150,width=240)
-
-# vout3_forecast %>% filter(retro_year==3) %>%
-#   arrange(desc(Year))
-
-## index parameter plot ----
-
-bestmodel$rep_summary %>% rownames %>% unique
-
-par_pred = bestmodel$index %>%
-  mutate(a_se = bestmodel$rep_summary[rownames(bestmodel$rep_summary)=="a_par",2],
-         b_se = bestmodel$rep_summary[rownames(bestmodel$rep_summary)=="b_par",2],
-         c_se = bestmodel$rep_summary[rownames(bestmodel$rep_summary)=="c_par",2]) %>%
-  mutate(a = a_par-2*log(bestmodel$time_sd),
-         b = b_par*bestmodel$time_sd+bestmodel$time_mean,
-         b_se = b_se*bestmodel$time_sd) %>%
-  rename(c = c_par) %>%
-  dplyr::select(Year,a,b,c,a_se,b_se,c_se)
-par_pred_mean = par_pred %>% dplyr::select(Year,a,b,c) %>%
-  gather(key=parameter,value=value,-Year)
-par_pred_se = par_pred %>% dplyr::select(Year,a_se,b_se,c_se) %>%
-  rename(a=a_se,b=b_se,c=c_se) %>%
-  gather(key=parameter,value=SE,-Year)
-CI = 0.8
-par_pred2 = full_join(par_pred_mean,par_pred_se) %>%
-  mutate(upper = qnorm((1+CI)/2,value,SE),lower=qnorm((1-CI)/2,value,SE))
-
-par_pred2_a = par_pred2 %>% dplyr::filter(parameter=="a")
-par_pred2_b = par_pred2 %>% dplyr::filter(parameter=="b")
-par_pred2_c = par_pred2 %>% dplyr::filter(parameter=="c")
-
-g_a = ggplot(data=par_pred2_a,aes(x=Year)) +
-  geom_ribbon(aes(ymax=upper,ymin=lower),alpha=0.4)+
-  geom_path(aes(y=value),size =1)+
-  geom_point(aes(y=value),size=2)+
-  theme_bw(base_size=11)+ylab("a")+
-  # geom_hline(yintercept=bestmodel$opt$par["a_mean"]-2*log(bestmodel$time_sd),linetype="dashed",colour="blue",
-  # size=1)+
-  ggtitle("(a) Pulse narrowness")
-g_a
-
-g_b = ggplot(data=par_pred2_b,aes(x=Year)) +
-  geom_ribbon(aes(ymax=upper,ymin=lower),alpha=0.4)+
-  geom_path(aes(y=value),size =1)+
-  geom_point(aes(y=value),size=2)+
-  theme_bw(base_size=11)+ylab("b")+
-  ggtitle("(b) Peak timing")+
-  # geom_hline(yintercept=bestmodel$opt$par["b_mean"]*bestmodel$time_sd+bestmodel$time_mean,linetype="dashed",colour="blue",
-  #            size=1)+
-  ylim(min(par_pred2_b$lower)-3,max(par_pred2_b$upper)+3)
-g_b
-
-g_c = ggplot(data=par_pred2_c,aes(x=Year)) +
-  geom_ribbon(aes(ymax=upper,ymin=lower),alpha=0.4)+
-  geom_path(aes(y=value),size=1)+
-  geom_point(aes(y=value),size=2)+
-  theme_bw(base_size=11)+ylab("c")+
-  ggtitle("(c) Peak size")
-g_c
-
-g_abc = gridExtra::grid.arrange(g_a,g_b,g_c,nrow=1)
-ggsave(g_abc, file="parameter_change.png",dpi=600,width=240,height=80,unit="mm")
+ggsave(g_hindCV_both,file="res/hindcast_CV_both.png",dpi=600,unit="mm",height=150,width=240)
 
 
-index = bestmodel$index %>%
-  dplyr::select(Year,Estimate,CV) %>%
-  rename("Standardized index" = Estimate)
-index_scaled = bestmodel$index_scaled %>%
-  dplyr::select(Year,Estimate,CV) %>%
-  rename("Standardized index (scaled)" = Estimate, "CV (scaled)" = CV)
-
-index = full_join(index,index_scaled,by="Year")
-
-nominal = bestmodel$input$dat %>% group_by(Year) %>% 
-  summarise(Max = max(Catch/Effort),Mean = mean(Catch/Effort))
-
-index = full_join(nominal,index,by="Year")
-index = index[,c(1:4,6,5,7)]
-
-index2 = data.frame(Year = index$Year,
-                    Nominal_max = str_c(round(index$Max,2)," (",round(index$Max/mean(index$Max),2),")",sep=""),
-                    Nominal_mean = str_c(round(index$Mean,2)," (",round(index$Mean/mean(index$Mean),2),")",sep=""),
-                    Standardized_index = str_c(round(index$`Standardized index`,2)," (",round(index$`Standardized index (scaled)`,2),")",sep=""),
-                    CV = str_c(round(index$CV,2)," (",round(index$`CV (scaled)`,2),")",sep=""))
-
-write.csv(index2, file="index_table.csv")
-
-g_trend = plot_spm_trend2(bestmodel,CI=CI,legend_position=c(0.6,0.9))
-g_trend$graph
-ggsave(g_trend$graph, file="year_trend.png",dpi=600,width=180,height=100,unit="mm")
-
-# bestmodel$opt$par["log_sigma_c"] %>% exp()
+## save forecasting results ----
 
 dat_forecast_all = vout_forecast %>% mutate(Model = "No-age0-index") %>%
   bind_rows(vout1_forecast %>% mutate(Model = "Standardized") ) %>%
   bind_rows(vout2_forecast %>% mutate(Model = "Nominal-max") ) %>%
   bind_rows(vout3_forecast %>% mutate(Model = "Nominal-mean") )
 
-write.csv(dat_forecast_all,file="dat_forecast_all.csv",row.names=FALSE)
+write.csv(dat_forecast_all,file="res/dat_forecast_all.csv",row.names=FALSE)
+
+### Fin ----

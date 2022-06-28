@@ -3,7 +3,7 @@
 ##### Modeling pulse dynamics for standardized recruitment index of juvenile pufferfish #####
 #############################################################################################
 
-# Set working directory and read libraries ----
+## Set working directory and read libraries ----
 
 setwd("~/git/PufferPulse")
 library(TMB)
@@ -19,7 +19,7 @@ source("surfnet_peak_modeling.R")
 TMB::compile("surfnet_peak_model.cpp")
 dyn.load(dynlib("surfnet_peak_model"))
 
-# read and process data ----
+## read and process data ----
 Dat0 = read.csv("data/surfnet_survey2021.csv", header=T)
 
 Dat = Dat0 %>% 
@@ -76,7 +76,7 @@ lengthmodel = spm(dat=Dat2,
 
 c(basemodel$BIC,areamodel$BIC,lengthmodel$BIC)
 
-# Model selection ----
+## Model selection ----
 
 basemodel = spm(dat=Dat2,
                 family="nbinom2",
@@ -265,7 +265,7 @@ aicc_table = summary_table2 %>% arrange(AICc) %>%
 both_table = full_join(aic_table , bic_table)
 write.csv(both_table, file="res/AIC-BIC_table.csv",row.names=FALSE)
 
-# Leave-out cross validation ----
+## Leave-out cross validation ----
 
   model_list = list(best_BIC,best_AIC)
   
@@ -302,7 +302,7 @@ g_trend_best$graph
 
 ggsave(g_trend_best$graph, file = "res/index_trend.png",dpi=600,unit="mm",height=150,width=240)
 
-# model diagnostics ----
+## model diagnostics ----
 
 set.seed(1010)
 catch_obs = Dat2$Catch
@@ -475,7 +475,7 @@ ggsave(g_all, file="res/bestmodel_diagnosis_rev.png",unit="mm",width=240,height=
 (time_peak_sd = bestmodel$rep_summary[rownames(bestmodel$rep_summary) == "b_par",2]*bestmodel$time_sd)
 
 
-# index parameter plot ----
+## index parameter plot ----
 
 bestmodel$rep_summary %>% rownames %>% unique
 
@@ -563,8 +563,8 @@ ggsave(g_trend$graph, file="res/year_trend.png",dpi=600,width=180,height=100,uni
 
 # bestmodel$opt$par["log_sigma_c"] %>% exp()
 
-# retrospective analysis of standardized index ----
-## Results are not shown in the article
+## retrospective analysis of standardized index ----
+### Results are not shown in the article
 
 load("bestmodel.rda")
 
@@ -624,12 +624,4 @@ g_index_retro
 ggsave(g_index_retro,filename="res/index_retro.png",dpi=600,unit="mm",
        height=100,width=160)
 
-
-### 仮に２０２１年のデータがすべてゼロだった場合
-
-Dat3 = Dat2 %>% mutate(Catch = ifelse(Year==2021,0,Catch))
-
-input_tmp = bestmodel$input
-input_tmp$dat <- Dat3
-bestmodel_zero = do.call(spm,input_tmp)
-bestmodel_zero$index
+### Fin ----
