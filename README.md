@@ -1,7 +1,7 @@
-# Code Share of Nishijima et al. (202X) 
+# Code Share of Nishijima et al. (202X)  
 
 This repository shares the following programming codes used in Nishijima et al. (202X)
-- 
+ 
 
 ## Citation 
 Please cite the following article if using the codes in this repository even if revised or updated.
