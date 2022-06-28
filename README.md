@@ -29,10 +29,10 @@ The folder "res" includes all results of figures and tables obtained by running 
 - Nishijima S., Suzuki S., Fukuta R., and Okada M. (2022) Modeling pulse dynamics of juvenile fish enables the short-term forecasting of population dynamics in Japanese pufferfish: A latent variable approach. bioRxiv [doi: https://doi.org/10.1101/2022.01.26.477932]
 
 ### Data for stock assessment (caa, waa, maa, M, cpue_age1, Recruit_estimate2020)
-- Suzuki, S., Yamamoto, T., Sawayama, S., and Nishijima, S. 2021. Stock assessment and evaluation for the Ise-Mikawa Bay population of ocellate puffer (fiscal year 2020). In Marine Fisheries Stock Assessment and Evaluation for Japanese Waters. Tokyo, Japan (in Japanese). pp. 1–44. Available from http://abchan.fra.go.jp/digests2020/index.html
+- Suzuki, S., Yamamoto, T., Sawayama, S., and Nishijima, S. (2021) Stock assessment and evaluation for the Ise-Mikawa Bay population of ocellate puffer (fiscal year 2020). In Marine Fisheries Stock Assessment and Evaluation for Japanese Waters. Tokyo, Japan (in Japanese). pp. 1–44. Available from http://abchan.fra.go.jp/digests2020/index.html
 
 ### VPA analysis with the "frasyr" package
 - Please run 'citation("frasyr")' and see https://github.com/ichimomo/frasyr
 
 ### About age-1 cpue index 
-- Nishijima, S., Suzuki, S., Ichinokawa, M., and Okamura, H. 2019. Integrated multi-timescale modeling untangles anthropogenic, environmental, and biological effects on catchability. Canadian Journal of Fisheries and Aquatic Sciences 76(11): 2045–2056. [doi: https://doi.org/10.1139/cjfas-2018-0114]
+- Nishijima, S., Suzuki, S., Ichinokawa, M., and Okamura, H. (2019) Integrated multi-timescale modeling untangles anthropogenic, environmental, and biological effects on catchability. Canadian Journal of Fisheries and Aquatic Sciences 76: 2045–2056. [doi: https://doi.org/10.1139/cjfas-2018-0114]
