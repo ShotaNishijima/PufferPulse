@@ -3,14 +3,9 @@
 ##### Analyzing VPA with short-term forecasting and hindcasting #####
 #####################################################################
 
-# Set working directory and read libraries ----
+## Set working directory and read libraries ----
 
 setwd("~/git/PufferPulse")
-
-# library(glmmTMB)
-# library(devtools)
-# library(TMB)
-# library(testthat)
 
 library(tidyverse)
 # devtools::install_github("ichimomo/frasyr@dev")
