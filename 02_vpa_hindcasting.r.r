@@ -52,12 +52,15 @@ vout <- vpa(dat0,
             max.age=c(1),
             term.F = "max",
             tf.mat=tf.mat) 
-
+# vout$input$fc.year
 vout$faa[,as.character((tf_year-4):(tf_year))]
 vout$naa[,as.character((tf_year-4):(tf_year))]
 vout$faa[,as.character(tf_year)]
 dat0$caa[,as.character(tf_year)]
 
+# tmp = get.SPR(vout)
+# tmp = ref.F(vout,waa.year=(tf_year-2):(tf_year-0),maa.year=(tf_year-2):(tf_year-0),M.year=(tf_year-2):(tf_year-0))
+# tmp$summary
 
 ## Processing age-0 index data ----
 
@@ -151,6 +154,18 @@ vout3$faa[,as.character((tf_year-4):tf_year)]
 cbind(vout1$sigma,vout2$sigma,vout3$sigma)
 
 #the best fit with standardized
+
+## Fcurrent relative to F30%SPR
+
+refF_res = list(vout,vout1,vout2,vout3) %>% 
+  map_dfr(., function(X) {
+    tmp = ref.F(X, waa.year=(tf_year-2):(tf_year-0),maa.year=(tf_year-2):(tf_year-0),M.year=(tf_year-2):(tf_year-0))
+    Fratio = 1/tmp$summary["Fref/Fcur","FpSPR.30.SPR"]
+    return( Fratio )
+  })
+
+tibble("Model"=c("w/o age0-index","Standardized","Nominal mean","Nominal max"),
+       "Fcur2Fp30SPR"=refF_res)
 
 ## residual plot ----
 
@@ -634,7 +649,7 @@ dat_hindCV_point = dat_hindCV %>% group_by(retro_id) %>%
 ggsave(g_hindCV,file="res/hindcast_CV.png",dpi=600,unit="mm",height=120,width=180)
 
 
-## two year forecast ----
+## two years forecast ----
 
 Q = vout_retro$result$Res %>% map_dbl(., function(x) x$q[1])
 Q_dat = data.frame(q = Q) %>% mutate(retro_year = 1:n())
@@ -784,7 +799,7 @@ ggsave(g_hindCV2,file="res/hindcast_CV2.png",dpi=600,unit="mm",height=120,width=
     theme_bw(base_size=10)+theme(legend.position="none")+
     scale_y_continuous(labels = scales::label_comma())+
     ylab("Age-1 index value")+
-    ggtitle("(b) two-year ahead")
+    ggtitle("(b) two-years ahead")
   
 )
 
